@@ -1,0 +1,70 @@
+// Backend: server.js
+const express = require("express");
+const multer = require("multer");
+const nodemailer = require("nodemailer");
+const cors = require("cors");
+const path = require("path");
+const fs = require("fs");
+require("dotenv").config(); // Load environment variables
+
+const app = express();
+const PORT = 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Multer setup for file uploads
+const upload = multer({ dest: "uploads/" });
+
+// POST route to handle form submission
+app.post("/submit", upload.single("resume"), async (req, res) => {
+  const { name, email, message, gender } = req.body;
+  const skills = req.body.skills || [];
+  const resume = req.file;
+
+  try {
+    // Nodemailer setup
+    const transporter = nodemailer.createTransport({
+      service: "Yahoo", // For Yahoo, set the correct service
+      auth: {
+        user: process.env.EMAIL_USER, // Email from environment variables
+        pass: process.env.EMAIL_PASS, // Email app password from environment variables
+      },
+    });
+
+    // Email options
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_USER, // Recipient email
+      subject: "New Form Submission",
+      text: `Name: ${name}\nEmail: ${email}\nMessage: ${message}\nGender: ${gender}\nSkills: ${skills.join(", ")}`,
+      attachments: resume
+        ? [
+            {
+              filename: resume.originalname,
+              path: resume.path,
+            },
+          ]
+        : [],
+    };
+
+    // Send email
+    await transporter.sendMail(mailOptions);
+
+    // Clean up uploaded file
+    if (resume) {
+      fs.unlinkSync(resume.path);
+    }
+
+    res.status(200).json({ message: "Form submitted successfully!" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error submitting form." });
+  }
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
